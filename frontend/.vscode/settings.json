@@ -1,0 +1,31 @@
+{
+  // 🔧 Use Prettier as the default formatter
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+
+  // 🧹 Format whenever you save
+  "editor.formatOnSave": true,
+
+  // ✨ Let ESLint also fix issues on save (uses Prettier under the hood)
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit",
+    "source.fixAll.eslint": "explicit"
+  },
+
+  // ⚙️ Optional: Disable other formatters to avoid conflicts
+  "eslint.format.enable": true,
+  "prettier.requireConfig": true,
+
+  // Apply Prettier for specific languages (if needed)
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}
