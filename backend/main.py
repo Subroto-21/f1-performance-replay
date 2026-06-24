@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import races
+from app.api import races, sessions
 from app.core.config import settings
 
 app = FastAPI(title="F1 Performance Replay API 🚀")
@@ -16,6 +16,7 @@ app.add_middleware(
 
 # Routers
 app.include_router(races.router)
+app.include_router(sessions.router)
 
 
 @app.get("/")

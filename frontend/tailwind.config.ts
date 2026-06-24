@@ -8,7 +8,17 @@ const config: Config = {
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        titillium: ["var(--font-titillium)", "system-ui", "sans-serif"],
+      },
+      colors: {
+        f1: {
+          red: "#e10600",
+          dark: "#080808",
+        },
+      },
+    },
   },
   plugins: [animate],
 };

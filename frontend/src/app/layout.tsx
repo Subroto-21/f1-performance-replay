@@ -4,6 +4,13 @@ import "./globals.css";
 import ClientWrapper from "@/components/ClientWrapper";
 import { theme } from "../theme";
 import Navbar from "@/components/NavBar";
+import { Titillium_Web } from "next/font/google";
+
+const titillium = Titillium_Web({
+  subsets: ["latin"],
+  weight: ["200", "300", "400", "600", "700", "900"],
+  variable: "--font-titillium",
+});
 
 export const metadata = {
   title: "F1 Performance Replay",
@@ -12,8 +19,8 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className={titillium.variable}>
+      <body className={titillium.className}>
         <ConfigProvider theme={theme}>
           <Navbar />
           <main className="pt-16">

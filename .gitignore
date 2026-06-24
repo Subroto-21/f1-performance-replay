@@ -10,5 +10,12 @@ node_modules/
 .next/
 .env.local
 
+# FastF1 cache
+backend/cache/
+
+# Root-level scratchpad lockfile
+/package-lock.json
+
 # OS
 .DS_Store
+Thumbs.db

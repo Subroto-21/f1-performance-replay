@@ -2,7 +2,7 @@ import type { ThemeConfig } from "antd";
 
 export const theme: ThemeConfig = {
   token: {
-    colorPrimary: "#ff1e1e",
+    colorPrimary: "#e10600",
     colorText: "#fff",
     borderRadius: 8,
     controlHeight: 40,
@@ -19,14 +19,11 @@ export const theme: ThemeConfig = {
       colorBgElevated: "#1f1f1f",
     },
     Button: {
-      colorBgContainer: "#121212", // black background
-      colorText: "#ffffff", // white text
-      colorBorder: "#444", // invisible border
-      colorTextHover: "#ff3333", // red text on hover
-      colorBorderHover: "#ff3333", // red border on hover
-      colorBgContainerHover: "#000000", // keep bg black on hover
-      colorBgContainerDisabled: "#000000", // black when disabled
-      colorTextDisabled: "#555555", // gray text when disabled
+      colorBgContainer: "#121212",
+      colorText: "#ffffff",
+      colorBorder: "#444",
+      colorBgContainerDisabled: "#000000",
+      colorTextDisabled: "#555555",
       borderRadius: 8,
     },
   },
