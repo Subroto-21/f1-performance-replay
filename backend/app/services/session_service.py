@@ -173,6 +173,28 @@ def get_laps_for_session(year: int, round_number: int, session_key: str) -> dict
     }
 
 
+def get_circuit_corners(year: int, round_number: int, session_key: str) -> dict:
+    session = fastf1.get_session(year, round_number, session_key)
+    session.load(laps=True, telemetry=True, weather=False, messages=False)
+
+    circuit_info = session.get_circuit_info()
+    if circuit_info is None:
+        return {"corners": []}
+
+    corners = []
+    for _, row in circuit_info.corners.iterrows():
+        dist = _safe(row.get("Distance"))
+        if dist is None:
+            continue
+        corners.append({
+            "number": int(row["Number"]),
+            "letter": str(_safe(row.get("Letter")) or ""),
+            "distance": round(float(dist), 1),
+        })
+
+    return {"corners": corners}
+
+
 def get_telemetry_comparison(
     year: int,
     round_number: int,

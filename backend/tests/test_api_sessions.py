@@ -30,6 +30,18 @@ def test_get_laps_returns_500_on_service_error(monkeypatch):
     assert "fastf1 blew up" in resp.json()["detail"]
 
 
+def test_get_circuit_returns_service_payload(monkeypatch):
+    fake_payload = {"corners": [{"number": 1, "letter": "", "distance": 338.0}]}
+    monkeypatch.setattr(
+        sessions_api.session_service, "get_circuit_corners", lambda *a, **k: fake_payload
+    )
+
+    resp = client.get("/api/sessions/2024/15/FP1/circuit")
+
+    assert resp.status_code == 200
+    assert resp.json() == fake_payload
+
+
 def test_get_telemetry_forwards_parallel_drivers_and_laps(monkeypatch):
     captured = {}
 

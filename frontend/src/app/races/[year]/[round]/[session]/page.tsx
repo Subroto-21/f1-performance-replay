@@ -1,14 +1,16 @@
 "use client";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getSessionResults,
   getSessionLaps,
   getSessionTelemetry,
+  getSessionCircuit,
   SessionResultsResponse,
   SessionLapsResponse,
   TelemetryResponse,
+  CornerInfo,
 } from "@/services/sessionsService";
 import { assignDriverColors } from "@/lib/driverColors";
 import { pushRecentSession } from "@/lib/recentSessions";
@@ -66,6 +68,9 @@ export default function SessionPage() {
   const [telemetry, setTelemetry] = useState<TelemetryResponse | null>(null);
   const [telErr, setTelErr] = useState<string | null>(null);
   const [telLoading, setTelLoading] = useState(false);
+
+  const [corners, setCorners] = useState<CornerInfo[]>([]);
+  const circuitLoadedFor = useRef<string | null>(null);
 
   const isQual = ["Q", "SQ"].includes(session);
   const isRace = ["R", "S"].includes(session);
@@ -142,6 +147,18 @@ export default function SessionPage() {
       .finally(() => setTelLoading(false));
   }, [activeTab, selectedDrivers, lapSelections, year, round, session]);
 
+  // Corner distances are session-wide (not per-driver) — fetch once when the
+  // Telemetry tab is first opened for this session.
+  useEffect(() => {
+    if (activeTab !== "telemetry") return;
+    const key = `${year}-${round}-${session}`;
+    if (circuitLoadedFor.current === key) return;
+    circuitLoadedFor.current = key;
+    getSessionCircuit(year, round, session)
+      .then((data) => setCorners(data.corners))
+      .catch(() => setCorners([]));
+  }, [activeTab, year, round, session]);
+
   return (
     <div className="max-w-7xl mx-auto p-6 flex flex-col gap-4">
       <div>
@@ -208,6 +225,7 @@ export default function SessionPage() {
                 error={telErr}
                 colors={colors}
                 year={year}
+                corners={corners}
               />
             </TabsContent>
 

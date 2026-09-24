@@ -1,9 +1,23 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
-import { DriverLaps, DriverTelemetry, TelemetryResponse } from "@/services/sessionsService";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ReferenceLine,
+} from "recharts";
+import {
+  DriverLaps,
+  DriverTelemetry,
+  TelemetryResponse,
+  CornerInfo,
+} from "@/services/sessionsService";
 import { formatLapTime, compoundColor } from "@/lib/formatters";
+import { cornerLabel, nearestCornerLabel } from "@/lib/corners";
 import { Badge } from "@/components/ui/Badge";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Button } from "@/components/ui/Button";
@@ -38,6 +52,7 @@ type Props = {
   error: string | null;
   colors: Record<string, string>;
   year: number;
+  corners: CornerInfo[];
 };
 
 export default function TelemetryPanel({
@@ -50,6 +65,7 @@ export default function TelemetryPanel({
   error,
   colors,
   year,
+  corners,
 }: Props) {
   const [activeChannels, setActiveChannels] = useState<Set<Channel>>(new Set(DEFAULT_ON));
 
@@ -108,6 +124,43 @@ export default function TelemetryPanel({
       chartData.map((row) => ({ ...row }))
     );
   };
+
+  const channelPanels = useMemo(() => {
+    const panels: {
+      key: string;
+      label: string;
+      unit: string;
+      domain: [number, number];
+      dataKeySuffix: string;
+      tallHeight: number;
+    }[] = [];
+
+    if (validDrivers.length > 1) {
+      panels.push({
+        key: "delta",
+        label: "Delta (vs. first driver)",
+        unit: "s",
+        domain: deltaDomain,
+        dataKeySuffix: "delta",
+        tallHeight: 110,
+      });
+    }
+
+    for (const channel of visibleChannels) {
+      if (!activeChannels.has(channel)) continue;
+      const cfg = CHANNEL_CONFIG[channel];
+      panels.push({
+        key: channel,
+        label: `${cfg.label}${cfg.unit ? ` (${cfg.unit})` : ""}`,
+        unit: cfg.unit,
+        domain: cfg.domain,
+        dataKeySuffix: channel,
+        tallHeight: channel === "speed" ? 200 : 90,
+      });
+    }
+
+    return panels;
+  }, [validDrivers.length, deltaDomain, visibleChannels, activeChannels]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -190,37 +243,24 @@ export default function TelemetryPanel({
                 Track Map
               </span>
             </div>
-            <TrackMap drivers={validDrivers} colors={colors} />
+            <TrackMap drivers={validDrivers} colors={colors} corners={corners} />
           </div>
 
-          {validDrivers.length > 1 && (
+          {channelPanels.map((p, i) => (
             <ChannelPanel
-              label="Delta (vs. first driver)"
-              unit="s"
-              domain={deltaDomain}
-              dataKeySuffix="delta"
+              key={p.key}
+              label={p.label}
+              unit={p.unit}
+              domain={p.domain}
+              dataKeySuffix={p.dataKeySuffix}
               chartData={chartData}
               drivers={validDrivers}
               colors={colors}
-              tallHeight={110}
+              tallHeight={p.tallHeight}
+              corners={corners}
+              showAxisLabels={i === channelPanels.length - 1}
             />
-          )}
-
-          {visibleChannels
-            .filter((c) => activeChannels.has(c))
-            .map((channel) => (
-              <ChannelPanel
-                key={channel}
-                label={`${CHANNEL_CONFIG[channel].label}${CHANNEL_CONFIG[channel].unit ? ` (${CHANNEL_CONFIG[channel].unit})` : ""}`}
-                unit={CHANNEL_CONFIG[channel].unit}
-                domain={CHANNEL_CONFIG[channel].domain}
-                dataKeySuffix={channel}
-                chartData={chartData}
-                drivers={validDrivers}
-                colors={colors}
-                tallHeight={channel === "speed" ? 200 : 90}
-              />
-            ))}
+          ))}
         </div>
       )}
     </div>
@@ -236,6 +276,8 @@ function ChannelPanel({
   drivers,
   colors,
   tallHeight,
+  corners,
+  showAxisLabels,
 }: {
   label: string;
   unit: string;
@@ -245,6 +287,8 @@ function ChannelPanel({
   drivers: DriverTelemetry[];
   colors: Record<string, string>;
   tallHeight: number;
+  corners: CornerInfo[];
+  showAxisLabels: boolean;
 }) {
   return (
     <div>
@@ -256,16 +300,21 @@ function ChannelPanel({
       <ResponsiveContainer width="100%" height={tallHeight}>
         <LineChart
           data={chartData}
-          margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+          margin={{ top: 0, right: 0, bottom: showAxisLabels ? 16 : 0, left: 0 }}
           syncId="telemetry"
         >
           <XAxis
             dataKey="distance"
             type="number"
             domain={["dataMin", "dataMax"]}
-            tick={false}
+            ticks={showAxisLabels ? corners.map((c) => c.distance) : undefined}
+            tick={showAxisLabels ? { fill: "#8b93a1", fontSize: 10 } : false}
+            tickFormatter={(d: number) => {
+              const c = corners.find((cc) => Math.abs(cc.distance - d) < 1);
+              return c ? cornerLabel(c) : "";
+            }}
             axisLine={{ stroke: "var(--color-border)" }}
-            tickLine={false}
+            tickLine={showAxisLabels}
           />
           <YAxis
             domain={domain}
@@ -296,8 +345,21 @@ function ChannelPanel({
                 unit === "s" ? `${v > 0 ? "+" : ""}${v.toFixed(3)}s` : unit ? `${v}${unit}` : v;
               return [label, String(name).split("_")[0]];
             }}
-            labelFormatter={(d) => `${Math.round(d as number)} m`}
+            labelFormatter={(d) => {
+              const dist = d as number;
+              const corner = nearestCornerLabel(dist, corners);
+              return corner ? `${Math.round(dist)} m · ${corner}` : `${Math.round(dist)} m`;
+            }}
           />
+          {corners.map((c) => (
+            <ReferenceLine
+              key={`${c.number}${c.letter}`}
+              x={c.distance}
+              stroke="var(--color-border)"
+              strokeDasharray="2 3"
+              ifOverflow="extendDomain"
+            />
+          ))}
           {drivers.map((drv) => (
             <Line
               key={drv.driver}

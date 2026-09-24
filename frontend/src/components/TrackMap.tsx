@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { DriverTelemetry } from "@/services/sessionsService";
+import { DriverTelemetry, CornerInfo } from "@/services/sessionsService";
+import { cornerLabel, nearestIndexForDistance } from "@/lib/corners";
 import { Button } from "@/components/ui/Button";
 
 type Metric = "speed" | "throttle" | "brake";
@@ -46,9 +47,10 @@ function colorFor(metric: Metric, value: number): string {
 type Props = {
   drivers: DriverTelemetry[];
   colors: Record<string, string>;
+  corners: CornerInfo[];
 };
 
-export default function TrackMap({ drivers, colors }: Props) {
+export default function TrackMap({ drivers, colors, corners }: Props) {
   const [metric, setMetric] = useState<Metric>("speed");
   const [activeDriver, setActiveDriver] = useState<string | null>(null);
 
@@ -79,6 +81,14 @@ export default function TrackMap({ drivers, colors }: Props) {
     return points;
   }, [driver]);
 
+  const cornerMarkers = useMemo(() => {
+    if (!driver?.data?.distance?.length || !projected) return [];
+    return corners.map((c) => {
+      const idx = nearestIndexForDistance(driver.data.distance, c.distance);
+      return { label: cornerLabel(c), point: projected[idx] };
+    });
+  }, [driver, projected, corners]);
+
   if (!drivers.length || !driver || !projected) return null;
 
   const values = driver.data[metric];
@@ -107,7 +117,8 @@ export default function TrackMap({ drivers, colors }: Props) {
                 onClick={() => setActiveDriver(d.driver)}
                 className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-semibold transition-colors"
                 style={{
-                  borderColor: driver.driver === d.driver ? colors[d.driver] : "var(--color-border)",
+                  borderColor:
+                    driver.driver === d.driver ? colors[d.driver] : "var(--color-border)",
                   background: driver.driver === d.driver ? `${colors[d.driver]}1f` : "transparent",
                   color: driver.driver === d.driver ? colors[d.driver] : "var(--color-text-muted)",
                 }}
@@ -137,8 +148,31 @@ export default function TrackMap({ drivers, colors }: Props) {
               />
             );
           })}
+          {cornerMarkers.map(({ label, point: [cx, cy] }) => (
+            <g key={label}>
+              <circle cx={cx} cy={cy} r={9} fill="#0d0f13" stroke="#8b93a1" strokeWidth={1} />
+              <text
+                x={cx}
+                y={cy}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={8.5}
+                fontWeight={600}
+                fill="#e7e9ec"
+              >
+                {label}
+              </text>
+            </g>
+          ))}
           {/* Start/finish marker */}
-          <circle cx={projected[0][0]} cy={projected[0][1]} r={6} fill="#fff" stroke="#000" strokeWidth={1.5} />
+          <circle
+            cx={projected[0][0]}
+            cy={projected[0][1]}
+            r={6}
+            fill="#fff"
+            stroke="#000"
+            strokeWidth={1.5}
+          />
         </svg>
       </div>
 
@@ -152,7 +186,8 @@ export default function TrackMap({ drivers, colors }: Props) {
               <span className="w-2.5 h-2.5 rounded-sm" style={{ background: "#e10600" }} /> Braking
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-sm" style={{ background: "#3a4150" }} /> Off brake
+              <span className="w-2.5 h-2.5 rounded-sm" style={{ background: "#3a4150" }} /> Off
+              brake
             </span>
           </div>
         ) : (

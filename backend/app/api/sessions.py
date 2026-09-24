@@ -29,6 +29,14 @@ def get_laps(year: int, round: int, session: str):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.get("/api/sessions/{year}/{round}/{session}/circuit")
+def get_circuit(year: int, round: int, session: str):
+    try:
+        return session_service.get_circuit_corners(year, round, session)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.get("/api/sessions/{year}/{round}/{session}/telemetry")
 def get_telemetry(
     year: int,

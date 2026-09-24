@@ -108,6 +108,16 @@ export type SessionLapsResponse = {
   drivers: DriverLaps[];
 };
 
+export type CornerInfo = {
+  number: number;
+  letter: string;
+  distance: number;
+};
+
+export type CircuitInfoResponse = {
+  corners: CornerInfo[];
+};
+
 // ─── Fetchers ────────────────────────────────────────────────────────────────
 
 export function getRaceSessions(year: number, round: number) {
@@ -123,6 +133,12 @@ export function getSessionResults(year: number, round: number, session: string) 
 export function getSessionLaps(year: number, round: number, session: string) {
   return fetcher<SessionLapsResponse>(
     `${API_BASE_URL}/api/sessions/${year}/${round}/${session}/laps`
+  );
+}
+
+export function getSessionCircuit(year: number, round: number, session: string) {
+  return fetcher<CircuitInfoResponse>(
+    `${API_BASE_URL}/api/sessions/${year}/${round}/${session}/circuit`
   );
 }
 
