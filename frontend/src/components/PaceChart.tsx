@@ -1,9 +1,19 @@
 "use client";
 
 import { useMemo } from "react";
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, Legend } from "recharts";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ReferenceArea,
+} from "recharts";
 import { DriverLaps } from "@/services/sessionsService";
 import { formatLapTime, compoundColor } from "@/lib/formatters";
+import { buildFlagBands, FLAG_STYLE } from "@/lib/trackStatus";
 import { Button } from "@/components/ui/Button";
 import { downloadCsv } from "@/lib/exportCsv";
 
@@ -17,6 +27,17 @@ export default function PaceChart({ selectedDrivers, driverLaps, colors }: Props
   const relevant = driverLaps.filter((d) => selectedDrivers.includes(d.driver));
 
   const maxLap = Math.max(0, ...relevant.flatMap((d) => d.laps.map((l) => l.lap_number ?? 0)));
+
+  // Derived from every driver's laps (not just the selected ones) so one
+  // driver's slightly-off lap boundary doesn't hide a real SC/VSC period.
+  const flagBands = useMemo(
+    () =>
+      buildFlagBands(
+        driverLaps.map((d) => d.laps),
+        maxLap
+      ),
+    [driverLaps, maxLap]
+  );
 
   const chartData = useMemo(() => {
     const rows: Record<string, number | string>[] = [];
@@ -45,9 +66,26 @@ export default function PaceChart({ selectedDrivers, driverLaps, colors }: Props
     );
   }
 
+  const activeCategories = Array.from(new Set(flagBands.map((b) => b.category)));
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {activeCategories.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-text-faint">
+            {activeCategories.map((cat) => (
+              <span key={cat} className="flex items-center gap-1.5">
+                <span
+                  className="w-2.5 h-2.5 rounded-sm"
+                  style={{ background: FLAG_STYLE[cat].color, opacity: 0.7 }}
+                />
+                {FLAG_STYLE[cat].label}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span />
+        )}
         <Button size="sm" variant="secondary" onClick={handleExport}>
           Export CSV
         </Button>
@@ -86,12 +124,34 @@ export default function PaceChart({ selectedDrivers, driverLaps, colors }: Props
               color: "#e7e9ec",
             }}
             formatter={(val, name) => [formatLapTime(Number(val)), String(name).split("_")[0]]}
-            labelFormatter={(l) => `Lap ${l}`}
+            labelFormatter={(l) => {
+              const band = flagBands.find((b) => l >= b.start && l <= b.end);
+              return band ? `Lap ${l} · ${FLAG_STYLE[band.category].label}` : `Lap ${l}`;
+            }}
           />
           <Legend
             wrapperStyle={{ fontSize: 12 }}
             formatter={(value) => <span style={{ color: "#8b93a1" }}>{value}</span>}
           />
+          {flagBands.map((b) => (
+            <ReferenceArea
+              key={`${b.start}-${b.end}`}
+              x1={b.start - 0.5}
+              x2={b.end + 0.5}
+              fill={FLAG_STYLE[b.category].color}
+              fillOpacity={0.16}
+              stroke={FLAG_STYLE[b.category].color}
+              strokeOpacity={0.5}
+              ifOverflow="extendDomain"
+              label={{
+                value: FLAG_STYLE[b.category].label,
+                position: "insideTop",
+                fill: FLAG_STYLE[b.category].color,
+                fontSize: 10,
+                fontWeight: 700,
+              }}
+            />
+          ))}
           {relevant.map((d) => (
             <Line
               key={d.driver}
