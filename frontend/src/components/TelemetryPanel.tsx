@@ -24,6 +24,10 @@ const CHANNEL_CONFIG: Record<Channel, { label: string; unit: string; domain: [nu
 const ALL_CHANNELS: Channel[] = ["speed", "throttle", "brake", "gear", "drs"];
 const DEFAULT_ON: Channel[] = ["speed", "throttle", "brake", "gear"];
 
+// 2026 regs dropped the classic wing-flap DRS for an active-aero / Manual
+// Override Mode system — the DRS telemetry channel is always 0 from then on.
+const DRS_REMOVED_FROM_YEAR = 2026;
+
 type Props = {
   selectedDrivers: string[];
   driverLaps: DriverLaps[];
@@ -33,6 +37,7 @@ type Props = {
   loading: boolean;
   error: string | null;
   colors: Record<string, string>;
+  year: number;
 };
 
 export default function TelemetryPanel({
@@ -44,8 +49,14 @@ export default function TelemetryPanel({
   loading,
   error,
   colors,
+  year,
 }: Props) {
   const [activeChannels, setActiveChannels] = useState<Set<Channel>>(new Set(DEFAULT_ON));
+
+  const visibleChannels = useMemo(
+    () => ALL_CHANNELS.filter((c) => c !== "drs" || year < DRS_REMOVED_FROM_YEAR),
+    [year]
+  );
 
   const toggleChannel = (c: Channel) => {
     setActiveChannels((prev) => {
@@ -75,12 +86,12 @@ export default function TelemetryPanel({
         row[`${drv.driver}_throttle`] = drv.data.throttle[i] ?? 0;
         row[`${drv.driver}_brake`] = drv.data.brake[i] ?? 0;
         row[`${drv.driver}_gear`] = drv.data.gear[i] ?? 0;
-        row[`${drv.driver}_drs`] = drv.data.drs[i] ?? 0;
+        if (year < DRS_REMOVED_FROM_YEAR) row[`${drv.driver}_drs`] = drv.data.drs[i] ?? 0;
         if (drv.data.delta != null) row[`${drv.driver}_delta`] = drv.data.delta[i] ?? 0;
       }
       return row;
     });
-  }, [validDrivers]);
+  }, [validDrivers, year]);
 
   const deltaDomain = useMemo((): [number, number] => {
     let max = 0.5;
@@ -120,7 +131,7 @@ export default function TelemetryPanel({
       {/* Channel toggles + export */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          {ALL_CHANNELS.map((c) => (
+          {visibleChannels.map((c) => (
             <label key={c} className="flex items-center gap-1.5 cursor-pointer">
               <Checkbox checked={activeChannels.has(c)} onCheckedChange={() => toggleChannel(c)} />
               <span className="text-[12px] text-text-muted">{CHANNEL_CONFIG[c].label}</span>
@@ -195,19 +206,21 @@ export default function TelemetryPanel({
             />
           )}
 
-          {ALL_CHANNELS.filter((c) => activeChannels.has(c)).map((channel) => (
-            <ChannelPanel
-              key={channel}
-              label={`${CHANNEL_CONFIG[channel].label}${CHANNEL_CONFIG[channel].unit ? ` (${CHANNEL_CONFIG[channel].unit})` : ""}`}
-              unit={CHANNEL_CONFIG[channel].unit}
-              domain={CHANNEL_CONFIG[channel].domain}
-              dataKeySuffix={channel}
-              chartData={chartData}
-              drivers={validDrivers}
-              colors={colors}
-              tallHeight={channel === "speed" ? 200 : 90}
-            />
-          ))}
+          {visibleChannels
+            .filter((c) => activeChannels.has(c))
+            .map((channel) => (
+              <ChannelPanel
+                key={channel}
+                label={`${CHANNEL_CONFIG[channel].label}${CHANNEL_CONFIG[channel].unit ? ` (${CHANNEL_CONFIG[channel].unit})` : ""}`}
+                unit={CHANNEL_CONFIG[channel].unit}
+                domain={CHANNEL_CONFIG[channel].domain}
+                dataKeySuffix={channel}
+                chartData={chartData}
+                drivers={validDrivers}
+                colors={colors}
+                tallHeight={channel === "speed" ? 200 : 90}
+              />
+            ))}
         </div>
       )}
     </div>

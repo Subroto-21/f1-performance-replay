@@ -207,6 +207,7 @@ export default function SessionPage() {
                 loading={telLoading}
                 error={telErr}
                 colors={colors}
+                year={year}
               />
             </TabsContent>
 
