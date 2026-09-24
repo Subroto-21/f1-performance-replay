@@ -221,6 +221,8 @@ def get_telemetry_comparison(
                 "gear":     [int(round(v)) for v in np.interp(dist_grid, distance_src, tel["nGear"].astype(float))],
                 "drs":      [int(round(v)) for v in np.interp(dist_grid, distance_src, tel["DRS"].astype(float))],
                 "time":     [round(float(t), 4) for t in time_vals],
+                "x":        interp("X"),
+                "y":        interp("Y"),
             }
 
             if ref_curve is None:

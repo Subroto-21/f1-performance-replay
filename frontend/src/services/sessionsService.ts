@@ -61,6 +61,8 @@ export type TelemetryData = {
   gear: number[];
   drs: number[];
   time: number[];
+  x: number[];
+  y: number[];
   delta?: number[];
 };
 

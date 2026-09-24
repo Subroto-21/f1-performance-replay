@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { Button } from "@/components/ui/Button";
 import { downloadCsv } from "@/lib/exportCsv";
 import LapPicker from "@/components/LapPicker";
+import TrackMap from "@/components/TrackMap";
 
 type Channel = "speed" | "throttle" | "brake" | "gear" | "drs";
 
@@ -170,6 +171,15 @@ export default function TelemetryPanel({
                 {drv.compound && <Badge color={compoundColor(drv.compound)}>{drv.compound}</Badge>}
               </div>
             ))}
+          </div>
+
+          <div>
+            <div className="flex justify-between items-center mb-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-text-faint">
+                Track Map
+              </span>
+            </div>
+            <TrackMap drivers={validDrivers} colors={colors} />
           </div>
 
           {validDrivers.length > 1 && (
