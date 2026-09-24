@@ -1,32 +1,24 @@
-import "antd/dist/reset.css";
-import { ConfigProvider } from "antd";
 import "./globals.css";
-import ClientWrapper from "@/components/ClientWrapper";
-import { theme } from "../theme";
-import Navbar from "@/components/NavBar";
-import { Titillium_Web } from "next/font/google";
+import { Inter } from "next/font/google";
+import NavBar from "@/components/NavBar";
 
-const titillium = Titillium_Web({
+const inter = Inter({
   subsets: ["latin"],
-  weight: ["200", "300", "400", "600", "700", "900"],
-  variable: "--font-titillium",
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-sans",
 });
 
 export const metadata = {
   title: "F1 Performance Replay",
-  description: "Animated F1-themed website built with Next.js + Framer Motion",
+  description: "Analyst workbench for F1 session and telemetry data, built on FastF1.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={titillium.variable}>
-      <body className={titillium.className}>
-        <ConfigProvider theme={theme}>
-          <Navbar />
-          <main className="pt-16">
-            <ClientWrapper>{children}</ClientWrapper>
-          </main>
-        </ConfigProvider>
+    <html lang="en" className={inter.variable}>
+      <body className={inter.className}>
+        <NavBar />
+        <main className="pt-12 min-h-screen">{children}</main>
       </body>
     </html>
   );

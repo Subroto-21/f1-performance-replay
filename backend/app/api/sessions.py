@@ -21,15 +21,23 @@ def get_results(year: int, round: int, session: str):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.get("/api/sessions/{year}/{round}/{session}/laps")
+def get_laps(year: int, round: int, session: str):
+    try:
+        return session_service.get_laps_for_session(year, round, session)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.get("/api/sessions/{year}/{round}/{session}/telemetry")
 def get_telemetry(
     year: int,
     round: int,
     session: str,
     drivers: List[str] = Query(..., description="Driver abbreviations, e.g. HAM&drivers=VER"),
-    lap: str = Query("fastest", description="'fastest' or a lap number"),
+    laps: List[str] = Query([], description="Parallel to drivers: 'fastest' or a lap number each"),
 ):
     try:
-        return session_service.get_telemetry_comparison(year, round, session, drivers, lap)
+        return session_service.get_telemetry_comparison(year, round, session, drivers, laps)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))

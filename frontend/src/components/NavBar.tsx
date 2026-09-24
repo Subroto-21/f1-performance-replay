@@ -1,136 +1,112 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
-import { MenuOutlined, CloseOutlined } from "@ant-design/icons";
-import { motion, AnimatePresence } from "framer-motion";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Select } from "@/components/ui/Select";
+import { AVAILABLE_YEARS } from "@/lib/years";
+import { getRaces, Race } from "@/services/racesService";
+import { getRaceSessions, SessionMeta } from "@/services/sessionsService";
 
-const navItems = [
-  { name: "Home", href: "/" },
-  { name: "Races", href: "/races" },
-  { name: "Teams", href: "/teams" },
-  { name: "Drivers", href: "/drivers" },
-  { name: "About", href: "/about" },
-];
+export default function NavBar() {
+  const router = useRouter();
+  const params = useParams();
 
-export default function Navbar() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const pathname = usePathname();
+  const urlYear = params.year ? Number(params.year) : undefined;
+  const urlRound = params.round ? Number(params.round) : undefined;
+  const urlSession = params.session ? String(params.session) : undefined;
+
+  const [year, setYear] = useState<number>(urlYear ?? AVAILABLE_YEARS[0]);
+  const [races, setRaces] = useState<Race[]>([]);
+  const [round, setRound] = useState<number | undefined>(urlRound);
+  const [sessions, setSessions] = useState<SessionMeta[]>([]);
+  const [session, setSession] = useState<string | undefined>(urlSession);
+
+  // Keep local state in sync when navigation happens elsewhere (e.g. links)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors the route params into local selector state
+    if (urlYear) setYear(urlYear);
+    setRound(urlRound);
+    setSession(urlSession);
+  }, [urlYear, urlRound, urlSession]);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 30);
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+    getRaces(year)
+      .then((d) => setRaces(d.races))
+      .catch(() => setRaces([]));
+  }, [year]);
+
+  useEffect(() => {
+    if (round === undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clears stale sessions when the round is unset
+      setSessions([]);
+      return;
+    }
+    getRaceSessions(year, round)
+      .then((d) => setSessions(d.sessions))
+      .catch(() => setSessions([]));
+  }, [year, round]);
+
+  const handleYear = (v: string) => {
+    const y = Number(v);
+    setYear(y);
+    setRound(undefined);
+    setSession(undefined);
+    router.push(`/races/${y}`);
+  };
+
+  const handleRound = (v: string) => {
+    const r = Number(v);
+    setRound(r);
+    setSession(undefined);
+    router.push(`/races/${year}/${r}`);
+  };
+
+  const handleSession = (v: string) => {
+    setSession(v);
+    if (round !== undefined) router.push(`/races/${year}/${round}/${v}`);
+  };
 
   return (
-    <nav
-      className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${
-        scrolled
-          ? "bg-black/95 backdrop-blur-xl shadow-[0_1px_0_rgba(255,255,255,0.06)] border-b border-white/5"
-          : "bg-gradient-to-b from-black/70 to-transparent border-b border-transparent"
-      }`}
-    >
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 bg-red-600 rounded-md flex items-center justify-center font-black text-white text-xs tracking-tight group-hover:bg-red-500 transition-all duration-200 shadow-[0_0_15px_rgba(225,6,0,0.3)] group-hover:shadow-[0_0_20px_rgba(225,6,0,0.5)]">
-              F1
-            </div>
-            <span className="text-white font-bold tracking-wide text-sm">
-              Performance{" "}
-              <span className="text-red-500">Replay</span>
-            </span>
-          </Link>
+    <header className="fixed top-0 left-0 right-0 z-40 h-12 border-b border-border bg-bg/95 backdrop-blur">
+      <div className="h-full flex items-center gap-4 px-4">
+        <Link href="/" className="flex items-center gap-2 shrink-0">
+          <span className="w-6 h-6 rounded bg-accent flex items-center justify-center text-[10px] font-bold text-white">
+            F1
+          </span>
+          <span className="text-[13px] font-semibold text-text hidden sm:inline">
+            Analyst Workbench
+          </span>
+        </Link>
 
-          {/* Desktop Menu */}
-          <div className="hidden md:flex items-center gap-1">
-            {navItems.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`relative px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
-                    isActive
-                      ? "text-white"
-                      : "text-gray-400 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  {isActive && (
-                    <motion.span
-                      layoutId="nav-pill"
-                      className="absolute inset-0 bg-white/8 rounded-lg border border-white/10"
-                      transition={{ type: "spring", bounce: 0.15, duration: 0.4 }}
-                    />
-                  )}
-                  <span className="relative z-10">{item.name}</span>
-                  {isActive && (
-                    <motion.span
-                      layoutId="nav-dot"
-                      className="absolute -bottom-px left-1/2 -translate-x-1/2 w-4 h-0.5 bg-red-500 rounded-full"
-                    />
-                  )}
-                </Link>
-              );
-            })}
-          </div>
+        <div className="w-px h-5 bg-border hidden sm:block" />
 
-          {/* Mobile Toggle */}
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden w-9 h-9 flex items-center justify-center text-white rounded-lg hover:bg-white/10 transition-colors"
-            aria-label="Toggle menu"
-          >
-            {isOpen ? <CloseOutlined /> : <MenuOutlined />}
-          </button>
+        <div className="flex items-center gap-2 overflow-x-auto">
+          <Select
+            value={String(year)}
+            onValueChange={handleYear}
+            options={AVAILABLE_YEARS.map((y) => ({ value: String(y), label: y }))}
+          />
+          <Select
+            value={round !== undefined ? String(round) : ""}
+            onValueChange={handleRound}
+            placeholder="Grand Prix"
+            disabled={races.length === 0}
+            options={races.map((r) => ({
+              value: String(r.RoundNumber),
+              label: `R${String(r.RoundNumber).padStart(2, "0")} · ${r.EventName}`,
+            }))}
+            className="max-w-[220px]"
+          />
+          <Select
+            value={session ?? ""}
+            onValueChange={handleSession}
+            placeholder="Session"
+            disabled={sessions.length === 0}
+            options={sessions.map((s) => ({ value: s.key, label: s.name }))}
+          />
         </div>
       </div>
-
-      {/* Mobile Menu */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
-            className="md:hidden overflow-hidden bg-black/98 backdrop-blur-xl border-t border-white/5"
-          >
-            <div className="px-4 py-3 space-y-1">
-              {navItems.map((item, i) => {
-                const isActive = pathname === item.href;
-                return (
-                  <motion.div
-                    key={item.name}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                  >
-                    <Link
-                      href={item.href}
-                      onClick={() => setIsOpen(false)}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                        isActive
-                          ? "bg-red-600/15 text-white border border-red-600/25"
-                          : "text-gray-400 hover:text-white hover:bg-white/5"
-                      }`}
-                    >
-                      {isActive && (
-                        <span className="w-1.5 h-1.5 bg-red-500 rounded-full shrink-0" />
-                      )}
-                      {item.name}
-                    </Link>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </nav>
+    </header>
   );
 }

@@ -26,11 +26,11 @@ export function formatDate(dateStr: string): string {
 }
 
 export const COMPOUND_COLOR: Record<string, string> = {
-  SOFT:   "#e10600",
+  SOFT: "#e10600",
   MEDIUM: "#fbbf24",
-  HARD:   "#d1d5db",
-  INTER:  "#22c55e",
-  WET:    "#60a5fa",
+  HARD: "#d1d5db",
+  INTER: "#22c55e",
+  WET: "#60a5fa",
   TEST_UNKNOWN: "#a855f7",
 };
 

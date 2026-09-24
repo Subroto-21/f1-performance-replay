@@ -60,6 +60,8 @@ export type TelemetryData = {
   brake: number[];
   gear: number[];
   drs: number[];
+  time: number[];
+  delta?: number[];
 };
 
 export type DriverTelemetry = {
@@ -75,6 +77,35 @@ export type TelemetryResponse = {
   drivers: DriverTelemetry[];
 };
 
+export type LapRecord = {
+  lap_number: number | null;
+  lap_time: number | null;
+  sector1: number | null;
+  sector2: number | null;
+  sector3: number | null;
+  compound: string;
+  tyre_life: number | null;
+  stint: number | null;
+  is_personal_best: boolean;
+  deleted: boolean;
+  pit_in: boolean;
+  pit_out: boolean;
+  track_status: string;
+  position: number | null;
+};
+
+export type DriverLaps = {
+  driver: string;
+  laps: LapRecord[];
+};
+
+export type SessionLapsResponse = {
+  year: number;
+  round: number;
+  session_key: string;
+  drivers: DriverLaps[];
+};
+
 // ─── Fetchers ────────────────────────────────────────────────────────────────
 
 export function getRaceSessions(year: number, round: number) {
@@ -87,15 +118,27 @@ export function getSessionResults(year: number, round: number, session: string) 
   );
 }
 
+export function getSessionLaps(year: number, round: number, session: string) {
+  return fetcher<SessionLapsResponse>(
+    `${API_BASE_URL}/api/sessions/${year}/${round}/${session}/laps`
+  );
+}
+
+/**
+ * `laps` is parallel to `drivers` — "fastest" or a lap number string for each.
+ * The first driver in the list becomes the delta-time reference (delta = 0).
+ */
 export function getSessionTelemetry(
   year: number,
   round: number,
   session: string,
   drivers: string[],
-  lap = "fastest"
+  laps: string[] = []
 ) {
-  const params = drivers.map((d) => `drivers=${d}`).join("&");
+  const params = new URLSearchParams();
+  drivers.forEach((d) => params.append("drivers", d));
+  drivers.forEach((_, i) => params.append("laps", laps[i] ?? "fastest"));
   return fetcher<TelemetryResponse>(
-    `${API_BASE_URL}/api/sessions/${year}/${round}/${session}/telemetry?${params}&lap=${lap}`
+    `${API_BASE_URL}/api/sessions/${year}/${round}/${session}/telemetry?${params.toString()}`
   );
 }

@@ -136,18 +136,60 @@ def get_session_results(year: int, round_number: int, session_key: str) -> dict:
     }
 
 
+def get_laps_for_session(year: int, round_number: int, session_key: str) -> dict:
+    session = fastf1.get_session(year, round_number, session_key)
+    session.load(laps=True, telemetry=False, weather=False, messages=False)
+
+    by_driver: dict[str, list] = {}
+    for _, row in session.laps.iterrows():
+        drv = str(_safe(row.get("Driver")) or "")
+        if not drv:
+            continue
+        by_driver.setdefault(drv, []).append({
+            "lap_number": int(row["LapNumber"]) if pd.notna(row.get("LapNumber")) else None,
+            "lap_time": _td(row.get("LapTime")),
+            "sector1": _td(row.get("Sector1Time")),
+            "sector2": _td(row.get("Sector2Time")),
+            "sector3": _td(row.get("Sector3Time")),
+            "compound": str(_safe(row.get("Compound")) or ""),
+            "tyre_life": int(row["TyreLife"]) if pd.notna(row.get("TyreLife")) else None,
+            "stint": int(row["Stint"]) if pd.notna(row.get("Stint")) else None,
+            "is_personal_best": bool(_safe(row.get("IsPersonalBest")) or False),
+            "deleted": bool(_safe(row.get("Deleted")) or False),
+            "pit_in": row.get("PitInTime") is not None and pd.notna(row.get("PitInTime")),
+            "pit_out": row.get("PitOutTime") is not None and pd.notna(row.get("PitOutTime")),
+            "track_status": str(_safe(row.get("TrackStatus")) or ""),
+            "position": int(row["Position"]) if pd.notna(row.get("Position")) else None,
+        })
+
+    return {
+        "year": year,
+        "round": round_number,
+        "session_key": session_key,
+        "drivers": [
+            {"driver": drv, "laps": sorted(laps, key=lambda l: l["lap_number"] or 0)}
+            for drv, laps in by_driver.items()
+        ],
+    }
+
+
 def get_telemetry_comparison(
     year: int,
     round_number: int,
     session_key: str,
     drivers: list[str],
-    lap: str = "fastest",
+    laps: list[str] | None = None,
 ) -> dict:
     session = fastf1.get_session(year, round_number, session_key)
     session.load(laps=True, telemetry=True, weather=False, messages=False)
 
+    laps = laps or []
+
     results = []
-    for driver in drivers:
+    ref_curve: tuple[np.ndarray, np.ndarray] | None = None  # (distance, time) of first successful driver
+
+    for i, driver in enumerate(drivers):
+        lap = laps[i] if i < len(laps) and laps[i] else "fastest"
         try:
             drv_laps = session.laps.pick_driver(driver)
             if drv_laps.empty:
@@ -161,24 +203,39 @@ def get_telemetry_comparison(
             # Downsample to 500 evenly-spaced distance points
             d_max = float(tel["Distance"].max())
             dist_grid = np.linspace(0, d_max, 500)
+            distance_src = tel["Distance"].astype(float)
 
             def interp(col: str) -> list:
-                vals = np.interp(dist_grid, tel["Distance"].astype(float), tel[col].astype(float))
+                vals = np.interp(dist_grid, distance_src, tel[col].astype(float))
                 return [round(float(v), 2) for v in vals]
+
+            time_src = tel["Time"].dt.total_seconds().astype(float)
+            time_vals = np.interp(dist_grid, distance_src, time_src)
+            time_vals = time_vals - time_vals[0]  # seconds elapsed since lap start
+
+            data = {
+                "distance": [round(float(d), 1) for d in dist_grid],
+                "speed":    interp("Speed"),
+                "throttle": interp("Throttle"),
+                "brake":    [int(round(v)) for v in np.interp(dist_grid, distance_src, tel["Brake"].astype(float))],
+                "gear":     [int(round(v)) for v in np.interp(dist_grid, distance_src, tel["nGear"].astype(float))],
+                "drs":      [int(round(v)) for v in np.interp(dist_grid, distance_src, tel["DRS"].astype(float))],
+                "time":     [round(float(t), 4) for t in time_vals],
+            }
+
+            if ref_curve is None:
+                ref_curve = (dist_grid, time_vals)
+            else:
+                ref_dist, ref_time = ref_curve
+                ref_time_on_grid = np.interp(dist_grid, ref_dist, ref_time)
+                data["delta"] = [round(float(d - r), 4) for d, r in zip(time_vals, ref_time_on_grid)]
 
             results.append({
                 "driver": driver,
                 "lap_number": int(lap_row["LapNumber"]),
                 "lap_time": _td(lap_row["LapTime"]),
                 "compound": str(_safe(lap_row.get("Compound")) or ""),
-                "data": {
-                    "distance": [round(float(d), 1) for d in dist_grid],
-                    "speed":    interp("Speed"),
-                    "throttle": interp("Throttle"),
-                    "brake":    [int(round(v)) for v in np.interp(dist_grid, tel["Distance"].astype(float), tel["Brake"].astype(float))],
-                    "gear":     [int(round(v)) for v in np.interp(dist_grid, tel["Distance"].astype(float), tel["nGear"].astype(float))],
-                    "drs":      [int(round(v)) for v in np.interp(dist_grid, tel["Distance"].astype(float), tel["DRS"].astype(float))],
-                },
+                "data": data,
             })
         except Exception as exc:
             results.append({"driver": driver, "error": str(exc)})
