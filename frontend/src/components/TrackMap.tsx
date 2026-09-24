@@ -16,7 +16,7 @@ const METRIC_LABEL: Record<Metric, string> = {
 const SPEED_DOMAIN: [number, number] = [40, 340];
 const VIEW_W = 900;
 const VIEW_H = 520;
-const PAD = 36;
+const PAD = 46; // extra room so offset corner labels don't clip the viewBox edge
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, v));
@@ -53,6 +53,7 @@ type Props = {
 export default function TrackMap({ drivers, colors, corners }: Props) {
   const [metric, setMetric] = useState<Metric>("speed");
   const [activeDriver, setActiveDriver] = useState<string | null>(null);
+  const [showCorners, setShowCorners] = useState(true);
 
   const driver = useMemo(() => {
     const found = drivers.find((d) => d.driver === activeDriver);
@@ -82,10 +83,40 @@ export default function TrackMap({ drivers, colors, corners }: Props) {
   }, [driver]);
 
   const cornerMarkers = useMemo(() => {
-    if (!driver?.data?.distance?.length || !projected) return [];
+    if (!driver?.data?.distance?.length || !projected || projected.length < 2) return [];
+
+    const cx = projected.reduce((s, [px]) => s + px, 0) / projected.length;
+    const cy = projected.reduce((s, [, py]) => s + py, 0) / projected.length;
+    const LABEL_OFFSET = 22;
+    const last = projected.length - 1;
+
     return corners.map((c) => {
       const idx = nearestIndexForDistance(driver.data.distance, c.distance);
-      return { label: cornerLabel(c), point: projected[idx] };
+      const [px, py] = projected[idx];
+
+      // Local track direction, from nearby points, to find the perpendicular.
+      const [ax, ay] = projected[Math.max(0, idx - 4)];
+      const [bx, by] = projected[Math.min(last, idx + 4)];
+      const tx = bx - ax;
+      const ty = by - ay;
+      const tlen = Math.hypot(tx, ty) || 1;
+
+      // Two perpendicular candidates — pick whichever points away from the
+      // track's centroid, so labels land outside the loop, not inside it.
+      const n1x = -ty / tlen;
+      const n1y = tx / tlen;
+      const d1 = Math.hypot(px + n1x * LABEL_OFFSET - cx, py + n1y * LABEL_OFFSET - cy);
+      const d2 = Math.hypot(px - n1x * LABEL_OFFSET - cx, py - n1y * LABEL_OFFSET - cy);
+      const sign = d1 >= d2 ? 1 : -1;
+
+      return {
+        label: cornerLabel(c),
+        point: [px, py] as [number, number],
+        labelPoint: [px + n1x * sign * LABEL_OFFSET, py + n1y * sign * LABEL_OFFSET] as [
+          number,
+          number,
+        ],
+      };
     });
   }, [driver, projected, corners]);
 
@@ -107,6 +138,13 @@ export default function TrackMap({ drivers, colors, corners }: Props) {
               {METRIC_LABEL[m]}
             </Button>
           ))}
+          <Button
+            size="sm"
+            variant={showCorners ? "primary" : "secondary"}
+            onClick={() => setShowCorners((v) => !v)}
+          >
+            Corners
+          </Button>
         </div>
 
         {drivers.length > 1 && (
@@ -148,22 +186,42 @@ export default function TrackMap({ drivers, colors, corners }: Props) {
               />
             );
           })}
-          {cornerMarkers.map(({ label, point: [cx, cy] }) => (
-            <g key={label}>
-              <circle cx={cx} cy={cy} r={9} fill="#0d0f13" stroke="#8b93a1" strokeWidth={1} />
-              <text
-                x={cx}
-                y={cy}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontSize={8.5}
-                fontWeight={600}
-                fill="#e7e9ec"
-              >
-                {label}
-              </text>
-            </g>
-          ))}
+          {showCorners &&
+            cornerMarkers.map(({ label, point: [px, py], labelPoint: [lx, ly] }) => (
+              <g key={label}>
+                <line
+                  x1={px}
+                  y1={py}
+                  x2={lx}
+                  y2={ly}
+                  stroke="#8b93a1"
+                  strokeWidth={1}
+                  opacity={0.6}
+                />
+                <circle
+                  cx={px}
+                  cy={py}
+                  r={2.5}
+                  fill="#e7e9ec"
+                  stroke="#0d0f13"
+                  strokeWidth={0.75}
+                />
+                <text
+                  x={lx}
+                  y={ly}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize={9.5}
+                  fontWeight={700}
+                  fill="#e7e9ec"
+                  stroke="#0d0f13"
+                  strokeWidth={3}
+                  paintOrder="stroke"
+                >
+                  {label}
+                </text>
+              </g>
+            ))}
           {/* Start/finish marker */}
           <circle
             cx={projected[0][0]}
