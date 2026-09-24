@@ -18,6 +18,7 @@ import {
 } from "@/services/sessionsService";
 import { formatLapTime, compoundColor } from "@/lib/formatters";
 import { cornerLabel, nearestCornerLabel } from "@/lib/corners";
+import { categorizeTrackStatus, FLAG_STYLE } from "@/lib/trackStatus";
 import { Badge } from "@/components/ui/Badge";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Button } from "@/components/ui/Button";
@@ -218,23 +219,43 @@ export default function TelemetryPanel({
         <div className="flex flex-col gap-4">
           {/* Legend */}
           <div className="flex flex-wrap gap-3">
-            {validDrivers.map((drv) => (
-              <div
-                key={drv.driver}
-                className="flex items-center gap-2 rounded-md border px-2.5 py-1"
-                style={{
-                  borderColor: `${colors[drv.driver]}40`,
-                  background: `${colors[drv.driver]}12`,
-                }}
-              >
-                <span className="w-2 h-2 rounded-full" style={{ background: colors[drv.driver] }} />
-                <span className="text-text text-[12px] font-semibold">{drv.driver}</span>
-                <span className="text-text-faint text-[11px]">
-                  {formatLapTime(drv.lap_time)} · Lap {drv.lap_number}
-                </span>
-                {drv.compound && <Badge color={compoundColor(drv.compound)}>{drv.compound}</Badge>}
-              </div>
-            ))}
+            {validDrivers.map((drv) => {
+              const lapRecord = driverLaps
+                .find((d) => d.driver === drv.driver)
+                ?.laps.find((l) => l.lap_number === drv.lap_number);
+              const flag = lapRecord ? categorizeTrackStatus(lapRecord.track_status || "") : null;
+
+              return (
+                <div
+                  key={drv.driver}
+                  className="flex items-center gap-2 rounded-md border px-2.5 py-1"
+                  style={{
+                    borderColor: `${colors[drv.driver]}40`,
+                    background: `${colors[drv.driver]}12`,
+                  }}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ background: colors[drv.driver] }}
+                  />
+                  <span className="text-text text-[12px] font-semibold">{drv.driver}</span>
+                  <span className="text-text-faint text-[11px]">
+                    {formatLapTime(drv.lap_time)} · Lap {drv.lap_number}
+                  </span>
+                  {drv.compound && (
+                    <Badge color={compoundColor(drv.compound)}>{drv.compound}</Badge>
+                  )}
+                  {flag && (
+                    <Badge
+                      color={FLAG_STYLE[flag].color}
+                      title={`This lap was run under ${FLAG_STYLE[flag].label}`}
+                    >
+                      {FLAG_STYLE[flag].label}
+                    </Badge>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           <div>

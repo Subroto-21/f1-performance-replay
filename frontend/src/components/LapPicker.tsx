@@ -3,7 +3,20 @@
 import * as Popover from "@radix-ui/react-popover";
 import { LapRecord } from "@/services/sessionsService";
 import { formatLapTime, compoundColor } from "@/lib/formatters";
+import { categorizeTrackStatus, FLAG_STYLE } from "@/lib/trackStatus";
 import { Badge } from "@/components/ui/Badge";
+
+function FlagDot({ status }: { status: string }) {
+  const cat = categorizeTrackStatus(status || "");
+  if (!cat) return null;
+  return (
+    <span
+      title={FLAG_STYLE[cat].label}
+      className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+      style={{ background: FLAG_STYLE[cat].color }}
+    />
+  );
+}
 
 type Props = {
   driver: string;
@@ -30,6 +43,7 @@ export default function LapPicker({ driver, color, laps, value, onChange }: Prop
           <span className="text-text-faint">
             {value === "fastest" ? "Fastest" : `Lap ${value}`} · {formatLapTime(current?.lap_time)}
           </span>
+          {current && <FlagDot status={current.track_status} />}
           <svg
             width={10}
             height={10}
@@ -64,9 +78,14 @@ export default function LapPicker({ driver, color, laps, value, onChange }: Prop
                 value === String(l.lap_number) ? "bg-accent-muted" : ""
               }`}
             >
-              <span className="text-text-muted tabular-nums">L{l.lap_number}</span>
-              <span className="text-text tabular-nums">{formatLapTime(l.lap_time)}</span>
-              {l.compound && <Badge color={compoundColor(l.compound)}>{l.compound}</Badge>}
+              <span className="flex items-center gap-1.5">
+                <span className="text-text-muted tabular-nums">L{l.lap_number}</span>
+                <FlagDot status={l.track_status} />
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="text-text tabular-nums">{formatLapTime(l.lap_time)}</span>
+                {l.compound && <Badge color={compoundColor(l.compound)}>{l.compound}</Badge>}
+              </span>
             </button>
           ))}
         </Popover.Content>
