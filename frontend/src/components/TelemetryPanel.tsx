@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
-  LineChart,
+  ComposedChart,
   Line,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
@@ -23,6 +24,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Button } from "@/components/ui/Button";
 import { downloadCsv } from "@/lib/exportCsv";
+import { speedDeltaOnGrid, symmetricDomain, zeroCrossingOffset } from "@/lib/speedDelta";
 import LapPicker from "@/components/LapPicker";
 import TrackMap from "@/components/TrackMap";
 
@@ -42,6 +44,9 @@ const DEFAULT_ON: Channel[] = ["speed", "throttle", "brake", "gear"];
 // 2026 regs dropped the classic wing-flap DRS for an active-aero / Manual
 // Override Mode system — the DRS telemetry channel is always 0 from then on.
 const DRS_REMOVED_FROM_YEAR = 2026;
+
+const FASTER_COLOR = "#22c55e"; // --color-success
+const SLOWER_COLOR = "#ef4444"; // --color-danger
 
 type Props = {
   selectedDrivers: string[];
@@ -69,6 +74,7 @@ export default function TelemetryPanel({
   corners,
 }: Props) {
   const [activeChannels, setActiveChannels] = useState<Set<Channel>>(new Set(DEFAULT_ON));
+  const [showSpeedDelta, setShowSpeedDelta] = useState(true);
 
   const visibleChannels = useMemo(
     () => ALL_CHANNELS.filter((c) => c !== "drs" || year < DRS_REMOVED_FROM_YEAR),
@@ -93,6 +99,28 @@ export default function TelemetryPanel({
     [telemetry]
   );
 
+  // Speed of each comparison driver minus the first (reference) driver, on the
+  // reference's distance grid. Positive = faster at that point on track.
+  const speedDeltas = useMemo(() => {
+    const out: Record<string, number[]> = {};
+    if (validDrivers.length < 2) return out;
+    const ref = validDrivers[0].data;
+    for (const drv of validDrivers.slice(1)) {
+      out[drv.driver] = speedDeltaOnGrid(
+        ref.distance,
+        ref.speed,
+        drv.data.distance,
+        drv.data.speed
+      );
+    }
+    return out;
+  }, [validDrivers]);
+
+  const speedDeltaDomain = useMemo(
+    () => symmetricDomain(Object.values(speedDeltas)),
+    [speedDeltas]
+  );
+
   const chartData = useMemo(() => {
     if (validDrivers.length === 0) return [];
     const base = validDrivers[0].data.distance;
@@ -105,10 +133,12 @@ export default function TelemetryPanel({
         row[`${drv.driver}_gear`] = drv.data.gear[i] ?? 0;
         if (year < DRS_REMOVED_FROM_YEAR) row[`${drv.driver}_drs`] = drv.data.drs[i] ?? 0;
         if (drv.data.delta != null) row[`${drv.driver}_delta`] = drv.data.delta[i] ?? 0;
+        const sd = speedDeltas[drv.driver];
+        if (sd) row[`${drv.driver}_speedDelta`] = sd[i] ?? 0;
       }
       return row;
     });
-  }, [validDrivers, year]);
+  }, [validDrivers, year, speedDeltas]);
 
   const deltaDomain = useMemo((): [number, number] => {
     let max = 0.5;
@@ -134,6 +164,9 @@ export default function TelemetryPanel({
       domain: [number, number];
       dataKeySuffix: string;
       tallHeight: number;
+      drivers: DriverTelemetry[];
+      signed?: boolean;
+      splitFill?: boolean;
     }[] = [];
 
     if (validDrivers.length > 1) {
@@ -144,7 +177,24 @@ export default function TelemetryPanel({
         domain: deltaDomain,
         dataKeySuffix: "delta",
         tallHeight: 110,
+        drivers: validDrivers,
       });
+
+      if (showSpeedDelta) {
+        panels.push({
+          key: "speedDelta",
+          label: "Speed delta vs. first driver (km/h)",
+          unit: "km/h",
+          domain: speedDeltaDomain,
+          dataKeySuffix: "speedDelta",
+          tallHeight: 110,
+          drivers: validDrivers.slice(1),
+          signed: true,
+          // Green/red fill only reads unambiguously for a single comparison;
+          // with more drivers, fall back to one line per driver color.
+          splitFill: validDrivers.length === 2,
+        });
+      }
     }
 
     for (const channel of visibleChannels) {
@@ -157,11 +207,19 @@ export default function TelemetryPanel({
         domain: cfg.domain,
         dataKeySuffix: channel,
         tallHeight: channel === "speed" ? 200 : 90,
+        drivers: validDrivers,
       });
     }
 
     return panels;
-  }, [validDrivers.length, deltaDomain, visibleChannels, activeChannels]);
+  }, [
+    validDrivers,
+    deltaDomain,
+    showSpeedDelta,
+    speedDeltaDomain,
+    visibleChannels,
+    activeChannels,
+  ]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -191,6 +249,15 @@ export default function TelemetryPanel({
               <span className="text-[12px] text-text-muted">{CHANNEL_CONFIG[c].label}</span>
             </label>
           ))}
+          {selectedDrivers.length > 1 && (
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <Checkbox
+                checked={showSpeedDelta}
+                onCheckedChange={() => setShowSpeedDelta((v) => !v)}
+              />
+              <span className="text-[12px] text-text-muted">Speed delta</span>
+            </label>
+          )}
         </div>
         <Button
           size="sm"
@@ -275,9 +342,11 @@ export default function TelemetryPanel({
               domain={p.domain}
               dataKeySuffix={p.dataKeySuffix}
               chartData={chartData}
-              drivers={validDrivers}
+              drivers={p.drivers}
               colors={colors}
               tallHeight={p.tallHeight}
+              signed={p.signed}
+              splitFill={p.splitFill}
               corners={corners}
               showAxisLabels={i === channelPanels.length - 1}
             />
@@ -299,6 +368,8 @@ function ChannelPanel({
   tallHeight,
   corners,
   showAxisLabels,
+  signed = false,
+  splitFill = false,
 }: {
   label: string;
   unit: string;
@@ -310,7 +381,19 @@ function ChannelPanel({
   tallHeight: number;
   corners: CornerInfo[];
   showAxisLabels: boolean;
+  signed?: boolean;
+  splitFill?: boolean;
 }) {
+  const gradientId = `split-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const splitDriver = splitFill && drivers.length === 1 ? drivers[0] : null;
+  const splitOffset = useMemo(
+    () =>
+      splitDriver
+        ? zeroCrossingOffset(chartData.map((r) => r[`${splitDriver.driver}_${dataKeySuffix}`] ?? 0))
+        : 0.5,
+    [splitDriver, chartData, dataKeySuffix]
+  );
+
   return (
     <div>
       <div className="flex justify-between items-center mb-1.5">
@@ -319,11 +402,19 @@ function ChannelPanel({
         </span>
       </div>
       <ResponsiveContainer width="100%" height={tallHeight}>
-        <LineChart
+        <ComposedChart
           data={chartData}
           margin={{ top: 0, right: 0, bottom: showAxisLabels ? 16 : 0, left: 0 }}
           syncId="telemetry"
         >
+          {splitDriver && (
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset={splitOffset} stopColor={FASTER_COLOR} />
+                <stop offset={splitOffset} stopColor={SLOWER_COLOR} />
+              </linearGradient>
+            </defs>
+          )}
           <XAxis
             dataKey="distance"
             type="number"
@@ -344,12 +435,15 @@ function ChannelPanel({
             tickLine={false}
             width={32}
             tickCount={4}
+            ticks={signed ? [domain[0], 0, domain[1]] : undefined}
             tickFormatter={(v: number) =>
               unit === "s"
                 ? `${v > 0.0005 ? "+" : v < -0.0005 ? "-" : ""}${Math.abs(v).toFixed(1)}`
-                : Number.isInteger(v)
-                  ? String(v)
-                  : v.toFixed(1)
+                : signed
+                  ? `${v > 0 ? "+" : ""}${v}`
+                  : Number.isInteger(v)
+                    ? String(v)
+                    : v.toFixed(1)
             }
           />
           <Tooltip
@@ -363,7 +457,13 @@ function ChannelPanel({
             formatter={(val, name) => {
               const v = Number(val);
               const label =
-                unit === "s" ? `${v > 0 ? "+" : ""}${v.toFixed(3)}s` : unit ? `${v}${unit}` : v;
+                unit === "s"
+                  ? `${v > 0 ? "+" : ""}${v.toFixed(3)}s`
+                  : signed
+                    ? `${v > 0 ? "+" : ""}${v.toFixed(1)} ${unit}`
+                    : unit
+                      ? `${v}${unit}`
+                      : v;
               return [label, String(name).split("_")[0]];
             }}
             labelFormatter={(d) => {
@@ -381,18 +481,34 @@ function ChannelPanel({
               ifOverflow="extendDomain"
             />
           ))}
-          {drivers.map((drv) => (
-            <Line
-              key={drv.driver}
+          {signed && <ReferenceLine y={0} stroke="var(--color-border-strong)" />}
+          {splitDriver ? (
+            <Area
               type="monotone"
-              dataKey={`${drv.driver}_${dataKeySuffix}`}
-              stroke={colors[drv.driver] ?? "#8b93a1"}
-              strokeWidth={1.5}
+              dataKey={`${splitDriver.driver}_${dataKeySuffix}`}
+              baseValue={0}
+              stroke={`url(#${gradientId})`}
+              fill={`url(#${gradientId})`}
+              fillOpacity={0.35}
+              strokeWidth={1.25}
               dot={false}
+              activeDot={{ fill: colors[splitDriver.driver] ?? "#8b93a1", r: 3 }}
               isAnimationActive={false}
             />
-          ))}
-        </LineChart>
+          ) : (
+            drivers.map((drv) => (
+              <Line
+                key={drv.driver}
+                type="monotone"
+                dataKey={`${drv.driver}_${dataKeySuffix}`}
+                stroke={colors[drv.driver] ?? "#8b93a1"}
+                strokeWidth={1.5}
+                dot={false}
+                isAnimationActive={false}
+              />
+            ))
+          )}
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
